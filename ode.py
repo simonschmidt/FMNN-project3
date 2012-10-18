@@ -16,4 +16,4 @@ class SecondOrderExplicit_Problem(Explicit_Problem):
 				rhs(t,y[0:n],y[n:]),
 				y[n:] ])
 
-		super(SecondOrderExplicit_Problem,self).__init__(newrhs,y0,t0,sw0,p0)
+		super(SecondOrderExplicit_Problem,self).__init__(newrhs,numpy.hstack((y0,yd0),t0,sw0,p0)
