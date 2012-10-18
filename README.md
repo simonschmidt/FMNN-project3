@@ -15,3 +15,10 @@ to
 include "../lib/sundials_constants.pxi" #Sundials related constants
 include "../lib/sundials_callbacks.pxi"
 ```
+To test installation:
+```
+from assimulo.examples import *
+
+cvode_with_jac.run_example()
+```
+you should get a plot
