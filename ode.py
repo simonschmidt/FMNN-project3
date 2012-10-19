@@ -59,6 +59,9 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
         arrow_scaling: maximum length of an arrow
         arrow_head_width:
 
+
+        returns the solution vector (t,y,dy)
+
     """
 
     # Default rhs, note time-dependences
@@ -109,4 +112,4 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
 
     pylab.show()
 
-    return (t,y)
+    return (t,y,dy)
