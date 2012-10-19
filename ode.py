@@ -83,7 +83,7 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
     model = SecondOrderExplicit_Problem(rhs,y0,yd0)
 
     sim = solver(model)
-    sim.h = 0.1
+
     t,y = sim.simulate(tfinal)
     (y,dy) = (y[:,0:2],y[:,2:])
 
