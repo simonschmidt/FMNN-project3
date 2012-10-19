@@ -1,6 +1,11 @@
 #coding: utf-8
 from assimulo.problem import Explicit_Problem  #Imports the problem formulation from Assimulo
 from assimulo.solvers.sundials import CVode #Imports the solver CVode from Assimulo
+from assimulo.explicit_ode import Explicit_ODE
+from assimulo.solvers import ExplicitEuler
+import assimulo
+import assimulo.ode
+import scipy.optimize
 import numpy
 import pylab
 
@@ -17,7 +22,7 @@ class SecondOrderExplicit_Problem(Explicit_Problem):
         # TODO
         # Handle sw0 and p0 in newrhs and when passing to Explicit_Problem
 
-
+        self.rhs_orig = rhs
         def newrhs(t,yyd,**kwargs):
             """
             transform y'' = rhs(t,y,y') into
@@ -55,16 +60,16 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
 
 
         arrows: Plot arrows in solution curve plot
-        arrow_distance: Number of solution ponits to skip between each arrow
+        arrow_distance: Number of solution points to skip between each arrow
         arrow_scaling: maximum length of an arrow
         arrow_head_width:
 
 
-        returns the solution vector (t,y,dy)
+        returns the solution matrix (t,y,dy)
 
     """
 
-    # Default rhs, note time-dependences
+    # Default rhs, note time-dependency
     if rhs is None:
         def rhs(t,y,dy):                
             A =numpy.array([[0,1],[-2,-1]])
@@ -79,7 +84,7 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
     model = SecondOrderExplicit_Problem(rhs,y0,yd0)
 
     sim = solver(model)
-
+    sim.h = 0.1
     t,y = sim.simulate(tfinal)
     (y,dy) = (y[:,0:2],y[:,2:])
 
@@ -113,3 +118,115 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
     pylab.show()
 
     return (t,y,dy)
+
+# Used src/solvers/euler.pyx to figure out behaviour
+# Could use some touching up, like get/set functions for g,b like h 
+# already has from ExplicitEuler
+class Newmark(ExplicitEuler):
+    def __init__(self,problem):
+        super(Newmark,self).__init__(problem)
+
+        # Set gamma and beta and stepsize options
+        self.options["g"] = 0.5  # if g is None else g
+        self.options["b"] = 0.25 # if b is None else b
+        self.options["h"] = 0.1
+
+        # Internal temporary result vector
+        self.n = len(self.y0)/2
+        self.a_old = None
+        self.rhs = problem.rhs_orig
+
+        self.supports["one_step_mode"] = True
+
+
+    def step(self,t,y,tf,opts):
+        h = self.options["h"]
+
+        if t+h < tf:
+            t, y = self._step(t,y,h)
+            return assimulo.ode.ID_PY_OK, t, y
+        else:
+            h = min(h, abs(tf-t))
+            t, y = self._step(t,y,h)
+            return assimulo.ode.ID_PY_COMPLETE, t, y
+
+
+    # Not sure why I needed this wrapper, without it _step from ExplicitEuler 
+    # is used instead
+    def integrate(self,t,y,tf,opts):
+        h = self.options["h"]
+        h = min(h, abs(tf-t))
+
+        k = numpy.floor((tf-t)/h)+1
+        tr = numpy.zeros(k)
+        yr = numpy.zeros((k,self.n*2))
+        i=0
+        while t+h < tf:
+            t,y = self._step(t,y,h)
+            tr[i]=t
+            yr[i]=y
+            i=i+1
+            h=min(h,abs(tf-t))
+        else:
+            t,y= self._step(t,y,h)
+            tr[i]=t
+            yr[i]=y
+            i=i+1
+
+        return assimulo.ode.ID_PY_COMPLETE, tr, yr
+
+    # Just some functions to de-uglify _step
+    def _newmark(self,y,t_new,h,a_new):
+        """
+            given old y and a a_new guess,
+            returns p_new and v_new
+        """
+        p_old = y[:self.n]
+        v_old = y[self.n:]
+        p_new = p_old + h*v_old + 0.5*h*h*((1-2*self.b)*self.a_old + 2*self.b*a_new)
+        v_new = v_old + h*((1-self.g)*self.a_old + self.g*a_new)
+        return (p_new,v_new)
+
+    def _newmarkError(self,y,t_new,h,a_new):
+        """
+            ||a_new - rhs(t_new, p_new, v_new)||
+        """
+        (p_new,v_new) = self._newmark(y,t_new,h,a_new)
+        return numpy.linalg.norm(a_new - self.rhs(t_new,p_new,v_new))
+
+    def _newmarkUpdate(self,y,t_new,h,a_new):
+        return numpy.hstack(self._newmark(y,t_new,h,a_new))
+
+    def _step(self,t,y,h):
+        """
+        This function ties the newmark process together to give the next values
+
+        Done by guessing a a_new, using that to get p_new and v_new, this is tied 
+        if everything is perfect
+        |a_new - rhs(t_new, p_new, v_new)| = 0 
+        so normal optimization methods to improve upon a_new
+        (currently scipy.optimize.fmin)
+        """
+
+        # Just used as starting value when finding min below
+        if self.a_old is None:
+            self.a_old = self.rhs(t,y[:self.n],y[self.n:])
+
+        self.b = self.options["b"]
+        self.g = self.options["g"]
+
+        t_new = t+h
+        # Any better ways to solve this?
+        a_new = scipy.optimize.fmin(lambda a: self._newmarkError(y,t_new,h,a), self.a_old ,disp=False)
+
+        y_new = self._newmarkUpdate(y,t_new,h,a_new)
+
+        self.a_old = a_new # save for next initial guess
+        return (t_new, y_new)
+
+    def print_statistics(self, verbose=assimulo.ode.NORMAL):
+        self.log_message('Final Run Statistics: %s \n' % self.problem.name,        verbose)
+        self.log_message(' Step-length          : %s '%(self.options["h"]), verbose)
+        self.log_message('\nSolver options:\n',                                    verbose)
+        self.log_message(' Solver            : Newmark',                     verbose)
+        self.log_message(' Solver type       : Fixed step\n',                      verbose)
