@@ -10,7 +10,7 @@ import numpy
 import pylab
 
 class SecondOrderExplicit_Problem(Explicit_Problem):
-    def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None):
+    def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None, isDamped=True):
         """y'' = rhs(t,y,y')
             
             Note: the result of a simulation returns value of derivative as well
@@ -34,14 +34,13 @@ class SecondOrderExplicit_Problem(Explicit_Problem):
             """
             n=len(yyd)/2
 
-            y=yyd[:n]
-            v=yyd[n:]
+            if newrhs.isDamped:
+                dv = rhs(t,yyd[:n],yyd[n:])
+            else:
+                dv = rhs(t,yyd[:n])
 
-            dv = rhs(t,y,v)
-            dy = v
-
-            res = numpy.hstack((dy,dv))
-            return res
+            return numpy.hstack((yyd[n:],dv))
+        newrhs.isDamped = isDamped
 
         # need to stack y0 and yd0 together as initial condition for newrhs
         yyd0 = numpy.hstack((y0,yd0))
@@ -118,6 +117,7 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
     pylab.show()
 
     return (t,y,dy)
+
 
 # Used src/solvers/euler.pyx to figure out behaviour
 # Could use some touching up, like get/set functions for g,b like h 
@@ -230,3 +230,4 @@ class Newmark(ExplicitEuler):
         self.log_message('\nSolver options:\n',                                    verbose)
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
+
