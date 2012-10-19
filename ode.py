@@ -5,7 +5,7 @@ import numpy
 import pylab
 
 class SecondOrderExplicit_Problem(Explicit_Problem):
-    def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None):
+    def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None, isDamped=True):
         """y'' = rhs(t,y,y')
             
             Note: the result of a simulation returns value of derivative as well
@@ -29,14 +29,13 @@ class SecondOrderExplicit_Problem(Explicit_Problem):
             """
             n=len(yyd)/2
 
-            y=yyd[:n]
-            v=yyd[n:]
+            if newrhs.isDamped:
+                dv = rhs(t,yyd[:n],yyd[n:])
+            else:
+                dv = rhs(t,yyd[:n])
 
-            dv = rhs(t,y,v)
-            dy = v
-
-            res = numpy.hstack((dy,dv))
-            return res
+            return numpy.hstack((yyd[n:],dv))
+        newrhs.isDamped = isDamped
 
         # need to stack y0 and yd0 together as initial condition for newrhs
         yyd0 = numpy.hstack((y0,yd0))
