@@ -127,13 +127,13 @@ class Newmark(ExplicitEuler):
         super(Newmark,self).__init__(problem)
 
         # Set gamma and beta and stepsize options
-        self.options["g"] = 0.5  # if g is None else g
-        self.options["b"] = 0.25 # if b is None else b
+        self.options["g"] = 0.6  
+        self.options["b"] = 0.4 
         self.options["h"] = 0.1
 
-        # Internal temporary result vector
         self.n = len(self.y0)/2
         self.a_old = None
+
         self.rhs = problem.rhs_orig
 
         self.supports["one_step_mode"] = True
@@ -175,7 +175,8 @@ class Newmark(ExplicitEuler):
 
         return assimulo.ode.ID_PY_COMPLETE, tr, yr
 
-    # Just some functions to de-uglify _step
+    # Some functions to de-uglify _step
+    # almost half the time is spent in this function :(
     def _newmark(self,y,t_new,h,a_new):
         """
             given old y and a a_new guess,
@@ -201,14 +202,14 @@ class Newmark(ExplicitEuler):
         """
         This function ties the newmark process together to give the next values
 
-        Done by guessing a a_new, using that to get p_new and v_new, this is tied 
-        if everything is perfect
+        Done by guessing a a_new, using that to get p_new and v_new,
+        if everything is perfect:
         |a_new - rhs(t_new, p_new, v_new)| = 0 
         so normal optimization methods to improve upon a_new
         (currently scipy.optimize.fmin)
         """
 
-        # Just used as starting value when finding min below
+        # Used as starting value when finding min below
         if self.a_old is None:
             self.a_old = self.rhs(t,y[:self.n],y[self.n:])
 
@@ -227,6 +228,8 @@ class Newmark(ExplicitEuler):
     def print_statistics(self, verbose=assimulo.ode.NORMAL):
         self.log_message('Final Run Statistics: %s \n' % self.problem.name,        verbose)
         self.log_message(' Step-length          : %s '%(self.options["h"]), verbose)
+        self.log_message(' Newmark gamma        : %s '%(self.options["g"]), verbose)
+        self.log_message(' Newmark beta         : %s '%(self.options["b"]), verbose)
         self.log_message('\nSolver options:\n',                                    verbose)
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
