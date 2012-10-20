@@ -3,11 +3,14 @@ from assimulo.problem import Explicit_Problem  #Imports the problem formulation 
 from assimulo.solvers.sundials import CVode #Imports the solver CVode from Assimulo
 from assimulo.explicit_ode import Explicit_ODE
 from assimulo.solvers import ExplicitEuler
+
 import assimulo
 import assimulo.ode
 import scipy.optimize
 import numpy
 import pylab
+
+from testproblem2ndODE import *
 
 class SecondOrderExplicit_Problem(Explicit_Problem):
     def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None, isDamped=True):
@@ -127,14 +130,24 @@ class Newmark(ExplicitEuler):
         super(Newmark,self).__init__(problem)
 
         # Set gamma and beta and stepsize options
-        self.options["g"] = 0.6  
-        self.options["b"] = 0.4 
-        self.options["h"] = 0.1
+        self.options["g"] = 0.5 
+        self.options["b"] = 0.25 
+        self.options["h"] = 0.05
 
         self.n = len(self.y0)/2
         self.a_old = None
 
-        self.rhs = problem.rhs_orig
+        # Want rhs that behaves like:
+        # a = rhs(t,p,v)
+        # When problem comes from SecondOrderExplicit_Problem
+        # use the original rhs
+        # otherwise modify suitably
+        if isinstance(problem,SecondOrderExplicit_Problem):
+            self.rhs = problem.rhs_orig
+        else:
+            def rhs(t,p,v):
+                return problem.rhs(t,numpy.hstack((p,v)) )[:self.n]
+            self.rhs=rhs
 
         self.supports["one_step_mode"] = True
 
@@ -157,7 +170,9 @@ class Newmark(ExplicitEuler):
         h = self.options["h"]
         h = min(h, abs(tf-t))
 
-        k = numpy.floor((tf-t)/h)+1
+        k = numpy.floor((tf-t)/h)
+        if k*h < tf-t:
+            k=k+1
         tr = numpy.zeros(k)
         yr = numpy.zeros((k,self.n*2))
         i=0
@@ -233,4 +248,36 @@ class Newmark(ExplicitEuler):
         self.log_message('\nSolver options:\n',                                    verbose)
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
+
+
+def pend_test(solver=Newmark):
+    pend = Pendulum2nd()
+    prob = Explicit_Problem(rhs=pend.fcn,y0=pend.initial_condition())
+    sim = solver(prob)
+    return sim.simulate(10.)
+
+def truck_test(solver=Newmark):
+    truck = Truck()
+    prob = Explicit_Problem(rhs=truck.fcn,y0=truck.initial_conditions())
+
+    sim = solver(prob)
+    nt,ny = sim.simulate(10.)
+
+    sim = CVode(prob)
+    ct,cy = sim.simulate(10.)
+
+    pylab.subplot(211)
+    pylab.suptitle('Truck')
+
+    pylab.plot(nt,ny)
+    pylab.xlabel('t')
+    pylab.title(solver.__name__)
+
+    pylab.subplot(212)
+    pylab.xlabel('t')
+    pylab.title('CVode')
+    pylab.plot(ct,cy)
+
+    pylab.show()
+    return ( (nt,ny), (ct,cy))
 
