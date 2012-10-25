@@ -126,6 +126,7 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
 # Could use some touching up, like get/set functions for g,b like h 
 # already has from ExplicitEuler
 class Newmark(ExplicitEuler):
+
     def __init__(self,problem):
         super(Newmark,self).__init__(problem)
 
@@ -137,6 +138,8 @@ class Newmark(ExplicitEuler):
         self.n = len(self.y0)/2
         self.a_old = None
 
+        self.statistics['nfevals'] = 0
+        self.statistics['nsteps'] = 0
         # Want rhs that behaves like:
         # a = rhs(t,p,v)
         # When problem comes from SecondOrderExplicit_Problem
@@ -183,11 +186,16 @@ class Newmark(ExplicitEuler):
             i=i+1
             h=min(h,abs(tf-t))
         else:
-            t,y= self._step(t,y,h)
-            tr[i]=t
-            yr[i]=y
+            if i<k:
+                t,y= self._step(t,y,h)
+                tr[i]=t
+                yr[i]=y
+            else:
+                # TODO sort this out
+                pass
             i=i+1
 
+        self.statistics['nsteps'] += k
         return assimulo.ode.ID_PY_COMPLETE, tr, yr
 
     # Some functions to de-uglify _step
@@ -205,10 +213,11 @@ class Newmark(ExplicitEuler):
 
     def _newmarkError(self,y,t_new,h,a_new):
         """
-            ||a_new - rhs(t_new, p_new, v_new)||
+            a_new - rhs(t_new, p_new, v_new)
         """
         (p_new,v_new) = self._newmark(y,t_new,h,a_new)
-        return numpy.linalg.norm(a_new - self.rhs(t_new,p_new,v_new))
+        #return numpy.linalg.norm(a_new - self.rhs(t_new,p_new,v_new))
+        return a_new - self.rhs(t_new,p_new,v_new)
 
     def _newmarkUpdate(self,y,t_new,h,a_new):
         return numpy.hstack(self._newmark(y,t_new,h,a_new))
@@ -233,7 +242,9 @@ class Newmark(ExplicitEuler):
 
         t_new = t+h
         # Any better ways to solve this?
-        a_new = scipy.optimize.fmin(lambda a: self._newmarkError(y,t_new,h,a), self.a_old ,disp=False)
+        optres = scipy.optimize.fsolve(lambda a: self._newmarkError(y,t_new,h,a), self.a_old ,full_output=1,xtol=1e-6)
+        a_new = optres[0]
+        self.statistics['nfevals'] += optres[1]['nfev']+1
 
         y_new = self._newmarkUpdate(y,t_new,h,a_new)
 
@@ -245,26 +256,24 @@ class Newmark(ExplicitEuler):
         self.log_message(' Step-length          : %s '%(self.options["h"]), verbose)
         self.log_message(' Newmark gamma        : %s '%(self.options["g"]), verbose)
         self.log_message(' Newmark beta         : %s '%(self.options["b"]), verbose)
+        self.log_message(' Number of Steps      : %s '%(self.statistics['nsteps']), verbose)
+        self.log_message(' Function evaluations : %s '%(self.statistics['nfevals']), verbose)
         self.log_message('\nSolver options:\n',                                    verbose)
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
 
 
-def pend_test(solver=Newmark):
-    pend = Pendulum2nd()
-    prob = Explicit_Problem(rhs=pend.fcn,y0=pend.initial_condition())
-    sim = solver(prob)
-    return sim.simulate(10.)
 
-def truck_test(solver=Newmark):
+def truck_test(solver=Newmark,tfinal=60.):
     truck = Truck()
     prob = Explicit_Problem(rhs=truck.fcn,y0=truck.initial_conditions())
 
     sim = solver(prob)
-    nt,ny = sim.simulate(10.)
+
+    nt,ny = sim.simulate(tfinal)
 
     sim = CVode(prob)
-    ct,cy = sim.simulate(10.)
+    ct,cy = sim.simulate(tfinal)
 
     pylab.subplot(211)
     pylab.suptitle('Truck')
