@@ -13,62 +13,55 @@ import pylab
 from testproblem2ndODE import *
 
 class SecondOrderExplicit_Problem(Explicit_Problem):
-    def __init__(self,rhs,y0,yd0,t0=0,sw0=None,p0=None, isDamped=True):
+    def __init__(self, rhs, y0, yd0, t0=0, sw0=None, p0=None, isDamped=True):
         """y'' = rhs(t,y,y')
             
-            Note: the result of a simulation returns value of derivative as well
-                To resolve, say y has n components:
-                t,y = sim.simulate(10.0)
-                (y,dy) = (y[:,:n],y[:,n:])
-
+        Note: the result of a simulation returns value of derivative as well
+            To resolve, say y has n components:
+            t,y = sim.simulate(10.0)
+            (y,dy) = (y[:,:n],y[:,n:])
         """
-        # TODO
-        # Handle sw0 and p0 in newrhs and when passing to Explicit_Problem
+
+        # TODO: Handle sw0 and p0 in newrhs and when passing to Explicit_Problem
 
         self.rhs_orig = rhs
-        def newrhs(t,yyd,**kwargs):
-            """
-            transform y'' = rhs(t,y,y') into
+
+        def newrhs(t, yyd, **kwargs):
+            """transform y'' = rhs(t,y,y') into
 
             y' = v
             v' = rhs(t,y,v)
 
             and pass that into Explicit_Problem
             """
+
             n=len(yyd)/2
 
-            if newrhs.isDamped:
-                dv = rhs(t,yyd[:n],yyd[n:])
-            else:
-                dv = rhs(t,yyd[:n])
+            dv = rhs(t,yyd[:n],yyd[n:]) if newrhs.isDamped else rhs(t,yyd[:n])
 
             return numpy.hstack((yyd[n:],dv))
+
         newrhs.isDamped = isDamped
 
         # need to stack y0 and yd0 together as initial condition for newrhs
         yyd0 = numpy.hstack((y0,yd0))
-        super(SecondOrderExplicit_Problem,self).__init__(newrhs,yyd0,t0)
 
+        super(SecondOrderExplicit_Problem, self).__init__(newrhs, yyd0, t0)
 
+def so_test(rhs=None, y0=None, yd0=None, tfinal=10.0, solver=CVode, arrows=True, arrow_distance=5, arrow_scaling=1., arrow_head_width=0.1):
+    """Function to simplify testing of SecondOrderExplicit_Problem
 
-def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow_distance=5,arrow_scaling=1.,arrow_head_width=0.1):
-    """
-        Function to simplify testing of SecondOrderExplicit_Problem
+    rhs: function s.t. y'' = rhs(t,y,y')
+    y0,yd0: initials
+    tfinal: stop time
+    solver: default CVode
 
-        rhs: function s.t. y'' = rhs(t,y,y')
-        y0,yd0: initials
-        tfinal: stop time
-        solver: default CVode
+    arrows: Plot arrows in solution curve plot
+    arrow_distance: Number of solution points to skip between each arrow
+    arrow_scaling: maximum length of an arrow
+    arrow_head_width:
 
-
-        arrows: Plot arrows in solution curve plot
-        arrow_distance: Number of solution points to skip between each arrow
-        arrow_scaling: maximum length of an arrow
-        arrow_head_width:
-
-
-        returns the solution matrix (t,y,dy)
-
+    returns the solution matrix (t,y,dy)
     """
 
     # Default rhs, note time-dependency
@@ -121,12 +114,10 @@ def so_test(rhs=None,y0=None,yd0=None,tfinal=10.0,solver=CVode,arrows=True,arrow
 
     return (t,y,dy)
 
-
 # Used src/solvers/euler.pyx to figure out behaviour
 # Could use some touching up, like get/set functions for g,b like h 
 # already has from ExplicitEuler
 class Newmark(ExplicitEuler):
-
     def __init__(self,problem):
         super(Newmark,self).__init__(problem)
 
@@ -165,7 +156,6 @@ class Newmark(ExplicitEuler):
             h = min(h, abs(tf-t))
             t, y = self._step(t,y,h)
             return assimulo.ode.ID_PY_COMPLETE, t, y
-
 
     # Not sure why I needed this wrapper, without it _step from ExplicitEuler 
     # is used instead
@@ -234,8 +224,7 @@ class Newmark(ExplicitEuler):
         """
 
         # Used as starting value when finding min below
-        if self.a_old is None:
-            self.a_old = self.rhs(t,y[:self.n],y[self.n:])
+        if self.a_old is None: self.a_old = self.rhs(t,y[:self.n],y[self.n:])
 
         self.b = self.options["b"]
         self.g = self.options["g"]
@@ -262,8 +251,6 @@ class Newmark(ExplicitEuler):
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
 
-
-
 def truck_test(solver=Newmark,tfinal=60.):
     truck = Truck()
     prob = Explicit_Problem(rhs=truck.fcn,y0=truck.initial_conditions())
@@ -288,7 +275,7 @@ def truck_test(solver=Newmark,tfinal=60.):
     pylab.plot(ct,cy)
 
     pylab.show()
-    return ( (nt,ny), (ct,cy))
+    return ((nt,ny), (ct,cy))
 
 if __name__ == "__main__":
     truck_test()
