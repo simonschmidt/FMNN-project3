@@ -127,7 +127,7 @@ class Newmark(ExplicitEuler):
         self.options["b"] = 0.25 
         self.options["h"] = 0.05
 
-        self.n = len(self.y0)/2
+        self.n = len(self.y0) / 2
         self.a_old = None
 
         self.statistics['nfevals'] = 0
@@ -140,80 +140,91 @@ class Newmark(ExplicitEuler):
         if isinstance(problem,SecondOrderExplicit_Problem):
             self.rhs = problem.rhs_orig
         else:
-            def rhs(t,p,v):
-                return problem.rhs(t,numpy.hstack((p,v)) )[:self.n]
+            def rhs(t, p, v):
+                return problem.rhs(t, numpy.hstack((p, v)) )[:self.n]
             self.rhs=rhs
 
         self.supports["one_step_mode"] = True
 
-
-    def step(self,t,y,tf,opts):
+    def step(self, t, y, tf, opts):
         h = self.options["h"]
 
-        if t+h < tf:
-            t, y = self._step(t,y,h)
+        if t + h < tf:
+            t, y = self._step(t, y, h)
             return assimulo.ode.ID_PY_OK, t, y
         else:
-            h = min(h, abs(tf-t))
-            t, y = self._step(t,y,h)
+            h = min(h, abs(tf - t))
+            t, y = self._step(t, y, h)
             return assimulo.ode.ID_PY_COMPLETE, t, y
 
     # Not sure why I needed this wrapper, without it _step from ExplicitEuler 
     # is used instead
-    def integrate(self,t,y,tf,opts):
+    def integrate(self, t, y, tf, opts):
         h = self.options["h"]
-        h = min(h, abs(tf-t))
+        h = min(h, abs(tf - t))
 
-        k = numpy.floor((tf-t)/h)
-        if k*h < tf-t:
-            k=k+1
+        k = numpy.floor((tf - t) / h)
+
+        if k * h < tf - t: k = k + 1
+
         tr = numpy.zeros(k)
         yr = numpy.zeros((k,self.n*2))
-        i=0
-        while t+h < tf:
-            t,y = self._step(t,y,h)
+
+        i = 0
+        while t + h < tf:
+            t,y = self._step(t, y, h)
+
+            tr[i] = t
+            yr[i] = y
+
+            i += 1
+
+            h = min(h, abs(tf - t))
+
+        if i < k:
+            t, y= self._step(t, y, h)
             tr[i]=t
             yr[i]=y
-            i=i+1
-            h=min(h,abs(tf-t))
         else:
-            if i<k:
-                t,y= self._step(t,y,h)
-                tr[i]=t
-                yr[i]=y
-            else:
-                # TODO sort this out
-                pass
-            i=i+1
+            pass # TODO sort this out
+
+        i += 1
 
         self.statistics['nsteps'] += k
+
         return assimulo.ode.ID_PY_COMPLETE, tr, yr
 
     # Some functions to de-uglify _step
     # almost half the time is spent in this function :(
-    def _newmark(self,y,t_new,h,a_new):
+    def _newmark(self, y, t_new, h, a_new):
         """
             given old y and a a_new guess,
             returns p_new and v_new
         """
+
         p_old = y[:self.n]
         v_old = y[self.n:]
-        p_new = p_old + h*v_old + 0.5*h*h*((1-2*self.b)*self.a_old + 2*self.b*a_new)
-        v_new = v_old + h*((1-self.g)*self.a_old + self.g*a_new)
-        return (p_new,v_new)
 
-    def _newmarkError(self,y,t_new,h,a_new):
+        p_new = p_old + h * v_old + 0.5 * h * h * ((1.0 - 2.0 * self.b) * self.a_old + 2 * self.b * a_new)
+        v_new = v_old + h * ((1.0 - self.g) * self.a_old + self.g * a_new)
+
+        return (p_new, v_new)
+
+    def _newmarkError(self, y, t_new, h, a_new):
         """
             a_new - rhs(t_new, p_new, v_new)
         """
+
         (p_new,v_new) = self._newmark(y,t_new,h,a_new)
+
         #return numpy.linalg.norm(a_new - self.rhs(t_new,p_new,v_new))
+
         return a_new - self.rhs(t_new,p_new,v_new)
 
-    def _newmarkUpdate(self,y,t_new,h,a_new):
-        return numpy.hstack(self._newmark(y,t_new,h,a_new))
+    def _newmarkUpdate(self, y, t_new, h, a_new):
+        return numpy.hstack(self._newmark(y, t_new, h, a_new))
 
-    def _step(self,t,y,h):
+    def _step(self, t, y, h):
         """
         This function ties the newmark process together to give the next values
 
@@ -230,15 +241,18 @@ class Newmark(ExplicitEuler):
         self.b = self.options["b"]
         self.g = self.options["g"]
 
-        t_new = t+h
+        t_new = t + h
+
         # Any better ways to solve this?
         optres = scipy.optimize.fsolve(lambda a: self._newmarkError(y,t_new,h,a), self.a_old ,full_output=1,xtol=1e-6)
         a_new = optres[0]
+
         self.statistics['nfevals'] += optres[1]['nfev']+1
 
         y_new = self._newmarkUpdate(y,t_new,h,a_new)
 
         self.a_old = a_new # save for next initial guess
+
         return (t_new, y_new)
 
     def print_statistics(self, verbose=assimulo.ode.NORMAL):
