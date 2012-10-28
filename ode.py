@@ -266,6 +266,125 @@ class Newmark(ExplicitEuler):
         self.log_message(' Solver            : Newmark',                     verbose)
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
 
+class HHT(Explicit_ODE):
+    
+    def __init__(self, problem):
+        Explicit_ODE.__init__(self, problem)
+        
+        self.options["g"] = 0.5 
+        self.options["b"] = 0.25 
+        self.options["a"] = 0.
+        self.options["h"] = 0.05
+        self.a_old = None
+
+        self.statistics['nfevals'] = 0
+        self.statistics['nsteps'] = 0
+        
+        self.supports["one_step_mode"] = True
+        
+        #problem.rhs expected to be rhs(t,y) = y'
+        #where y = hstack((p,v)) and y' = hstack((v,a))
+        self.rhs = problem.rhs
+        self.n = len(self.y0) / 2
+        
+    def step(self, t, y, tf, opts):
+        h = self.options["h"]
+
+        if t + h < tf:
+            t, y = self._step(t, y, h)
+            return assimulo.ode.ID_PY_OK, t, y
+        else:
+            h = min(h, abs(tf - t))
+            t, y = self._step(t, y, h)
+            return assimulo.ode.ID_PY_COMPLETE, t, y
+        
+    def _step(self, t, y, h):
+
+        if self.a_old is None: self.a_old = self.rhs(t,y)
+        
+        self.a = self.options["a"]
+        self.b = self.options["b"]
+        self.g = self.options["g"]
+
+        t_new = t + h
+
+        optres = scipy.optimize.fsolve(lambda a: self._hhtError(y,t,h,a), 
+                                       self.a_old ,full_output=1,xtol=1e-6)
+        a_new = optres[0]
+        print optres
+
+        self.statistics['nfevals'] += optres[1]['nfev']+1
+
+        y_new = self._hht(y,h,a_new)
+
+        self.a_old = a_new # save for next initial guess
+
+        return (t_new, y_new)
+        
+    def integrate(self,t,y,tf,opts):
+        h = self.options["h"]
+
+        k = numpy.floor((tf - t) / h)
+
+        if k * h < tf - t: k = k + 1
+
+        tr = numpy.zeros(k)
+        yr = numpy.zeros((k,self.n*2))
+
+        for i in xrange(k-1):
+            t,y = self._step(t, y, h)
+            tr[i] = t
+            yr[i] = y
+
+        t,y = self._step(t, y, tf-t)
+        tr[-1] = t
+        yr[-1] = y
+
+        self.statistics['nsteps'] += k
+
+        return assimulo.ode.ID_PY_COMPLETE, tr, yr
+        
+    def _hht(self, y, h, a_new):
+        """
+            given old y and a a_new guess,
+            returns y_new
+        """
+        y_new = y.copy()
+        b2 = self.b * 2
+        
+        y_new[:self.n] += h*y[self.n:]+.5*h**2*((1-b2)*self.a_old + b2 * a_new)
+        y_new[self.n:] += h*((1-self.g)*self.a_old + self.g * a_new)
+        return y_new
+
+    def _hhtError(self, y, t, h, a_new):
+        """
+            Wrong: a_new - rhs(t_new, p_new, v_new)
+        """
+        y_new = self._hht(y,h,a_new)
+        alpha = self.a
+        return a_new - ((1 + alpha) * self.rhs(t+h,y_new) -
+                        alpha * self.rhs(t, y))
+
+
+    def print_statistics(self, verbose=assimulo.ode.NORMAL):
+        self.log_message('Final Run Statistics: %s \n' % self.problem.name,        verbose)
+        self.log_message(' Step-length          : %s '%(self.options["h"]), verbose)
+        self.log_message(' HHT alpha        : %s '%(self.options["a"]), verbose)
+        self.log_message(' HHT gamma        : %s '%(self.options["g"]), verbose)
+        self.log_message(' HHT beta         : %s '%(self.options["b"]), verbose)
+        self.log_message(' Number of Steps      : %s '%(self.statistics['nsteps']), verbose)
+        self.log_message(' Function evaluations : %s '%(self.statistics['nfevals']), verbose)
+        self.log_message('\nSolver options:\n',                                    verbose)
+        self.log_message(' Solver            : HHT',                     verbose)
+        self.log_message(' Solver type       : Fixed step\n',                      verbose)
+
+def pend_test(solver=HHT):
+    pend = Pendulum2nd()
+    rhs = pend.fcn
+    prob = Explicit_Problem(rhs=rhs,y0=array(pend.initial_condition()))
+    sim = solver(prob)
+    return sim.simulate(10.)
+
 def truck_test(solver=Newmark,tfinal=60.):
     truck = Truck()
     prob = Explicit_Problem(rhs=truck.fcn,y0=truck.initial_conditions())
