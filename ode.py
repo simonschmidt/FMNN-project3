@@ -265,26 +265,29 @@ class Newmark(ExplicitEuler):
         self.log_message(' Solver type       : Fixed step\n',                      verbose)
 
 class HHT(Explicit_ODE):
-    
-    def __init__(self, problem):
+    def __init__(self, problem, alpha = 0.0):
         Explicit_ODE.__init__(self, problem)
-        
-        self.options["g"] = 0.5 
-        self.options["b"] = 0.25 
-        self.options["a"] = 0.
+
+        self.options["a"] = alpha
+        self.options["b"] = ((1.0 - self.options["a"]) / 2.0) ** 2
+        self.options["g"] = 0.5 - self.options["a"]
         self.options["h"] = 0.05
+        
+        if self.options["a"] > 0 or self.options["a"] < -1.0 / 3.0:
+            raise ValueError('alpha %s not in range [-1/3, 0]' % self.options["a"])
+
         self.a_old = None
 
         self.statistics['nfevals'] = 0
         self.statistics['nsteps'] = 0
-        
+
         self.supports["one_step_mode"] = True
-        
+
         #problem.rhs expected to be rhs(t,y) = y'
         #where y = hstack((p,v)) and y' = hstack((v,a))
         self.rhs = problem.rhs
         self.n = len(self.y0) / 2
-        
+
     def step(self, t, y, tf, opts):
         h = self.options["h"]
 
