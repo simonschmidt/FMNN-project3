@@ -290,3 +290,5 @@ def truck_test(solver=Newmark,tfinal=60.):
     pylab.show()
     return ( (nt,ny), (ct,cy))
 
+if __name__ == "__main__":
+    truck_test()
