@@ -66,7 +66,7 @@ def so_test(rhs=None, y0=None, yd0=None, tfinal=10.0, solver=CVode, arrows=True,
 
     # Default rhs, note time-dependency
     if rhs is None:
-        def rhs(t,y,dy):                
+        def rhs(t, y, dy):
             A =numpy.array([[ 0, 1], [-2, -1]])
             B =numpy.array([[-1, 2], [-2,  0]])
 
@@ -98,7 +98,7 @@ def so_test(rhs=None, y0=None, yd0=None, tfinal=10.0, solver=CVode, arrows=True,
     pylab.hold(True)
     pylab.grid(True)
 
-    pylab.plot(y[:,0], y[:,1])
+    pylab.plot(y[:, 0], y[:, 1])
 
     pylab.xlabel('$y_0$')
     pylab.ylabel('$y_1$')
@@ -120,7 +120,7 @@ def so_test(rhs=None, y0=None, yd0=None, tfinal=10.0, solver=CVode, arrows=True,
 # already has from ExplicitEuler
 class Newmark(ExplicitEuler):
     def __init__(self,problem):
-        super(Newmark,self).__init__(problem)
+        super(Newmark, self).__init__(problem)
 
         # Set gamma and beta and stepsize options
         self.options["g"] = 0.5 
@@ -140,9 +140,7 @@ class Newmark(ExplicitEuler):
         if isinstance(problem,SecondOrderExplicit_Problem):
             self.rhs = problem.rhs_orig
         else:
-            def rhs(t, p, v):
-                return problem.rhs(t, numpy.hstack((p, v)) )[:self.n]
-            self.rhs=rhs
+            self.rhs = lambda t, p, v: problem.rhs(t, numpy.hstack((p, v)))[:self.n]
 
         self.supports["one_step_mode"] = True
 
@@ -215,7 +213,7 @@ class Newmark(ExplicitEuler):
             a_new - rhs(t_new, p_new, v_new)
         """
 
-        (p_new,v_new) = self._newmark(y,t_new,h,a_new)
+        (p_new,v_new) = self._newmark(y, t_new, h, a_new)
 
         #return numpy.linalg.norm(a_new - self.rhs(t_new,p_new,v_new))
 
@@ -236,7 +234,7 @@ class Newmark(ExplicitEuler):
         """
 
         # Used as starting value when finding min below
-        if self.a_old is None: self.a_old = self.rhs(t,y[:self.n],y[self.n:])
+        if self.a_old is None: self.a_old = self.rhs(t, y[:self.n], y[self.n:])
 
         self.b = self.options["b"]
         self.g = self.options["g"]
@@ -244,12 +242,12 @@ class Newmark(ExplicitEuler):
         t_new = t + h
 
         # Any better ways to solve this?
-        optres = scipy.optimize.fsolve(lambda a: self._newmarkError(y,t_new,h,a), self.a_old ,full_output=1,xtol=1e-6)
+        optres = scipy.optimize.fsolve(lambda a: self._newmarkError(y, t_new, h, a), self.a_old, full_output=1, xtol=1e-6)
         a_new = optres[0]
 
-        self.statistics['nfevals'] += optres[1]['nfev']+1
+        self.statistics['nfevals'] += optres[1]['nfev'] + 1
 
-        y_new = self._newmarkUpdate(y,t_new,h,a_new)
+        y_new = self._newmarkUpdate(y, t_new, h, a_new)
 
         self.a_old = a_new # save for next initial guess
 
@@ -308,35 +306,34 @@ class HHT(Explicit_ODE):
 
         t_new = t + h
 
-        optres = scipy.optimize.fsolve(lambda a: self._hhtError(y,t,h,a), 
-                                       self.a_old ,full_output=1,xtol=1e-6)
+        optres = scipy.optimize.fsolve(lambda a: self._hhtError(y, t, h, a), self.a_old, full_output=1, xtol=1e-6)
+
         a_new = optres[0]
-        print optres
 
-        self.statistics['nfevals'] += optres[1]['nfev']+1
+        self.statistics['nfevals'] += optres[1]['nfev'] + 1
 
-        y_new = self._hht(y,h,a_new)
+        y_new = self._hht(y, h, a_new)
 
         self.a_old = a_new # save for next initial guess
 
         return (t_new, y_new)
         
-    def integrate(self,t,y,tf,opts):
+    def integrate(self, t, y, tf, opts):
         h = self.options["h"]
 
-        k = numpy.floor((tf - t) / h)
+        k = int(numpy.floor((tf - t) / h))
 
-        if k * h < tf - t: k = k + 1
+        if k * h < tf - t: k += 1
 
         tr = numpy.zeros(k)
-        yr = numpy.zeros((k,self.n*2))
+        yr = numpy.zeros((k, 2 * self.n))
 
-        for i in xrange(k-1):
+        for i in xrange(k - 1):
             t,y = self._step(t, y, h)
             tr[i] = t
             yr[i] = y
 
-        t,y = self._step(t, y, tf-t)
+        t,y = self._step(t, y, tf - t)
         tr[-1] = t
         yr[-1] = y
 
@@ -352,8 +349,8 @@ class HHT(Explicit_ODE):
         y_new = y.copy()
         b2 = self.b * 2
         
-        y_new[:self.n] += h*y[self.n:]+.5*h**2*((1-b2)*self.a_old + b2 * a_new)
-        y_new[self.n:] += h*((1-self.g)*self.a_old + self.g * a_new)
+        y_new[:self.n] += h * y[self.n:] + 0.5 * h**2 * ((1.0 - b2) * self.a_old + b2 * a_new)
+        y_new[self.n:] += h * ((1.0 - self.g) * self.a_old + self.g * a_new)
         return y_new
 
     def _hhtError(self, y, t, h, a_new):
@@ -362,9 +359,8 @@ class HHT(Explicit_ODE):
         """
         y_new = self._hht(y,h,a_new)
         alpha = self.a
-        return a_new - ((1 + alpha) * self.rhs(t+h,y_new) -
-                        alpha * self.rhs(t, y))
 
+        return a_new - ((1.0 + alpha) * self.rhs(t + h, y_new) - alpha * self.rhs(t, y))
 
     def print_statistics(self, verbose=assimulo.ode.NORMAL):
         self.log_message('Final Run Statistics: %s \n' % self.problem.name,        verbose)
@@ -381,13 +377,14 @@ class HHT(Explicit_ODE):
 def pend_test(solver=HHT):
     pend = Pendulum2nd()
     rhs = pend.fcn
-    prob = Explicit_Problem(rhs=rhs,y0=array(pend.initial_condition()))
+    prob = Explicit_Problem(rhs=rhs, y0=array(pend.initial_condition()))
     sim = solver(prob)
-    return sim.simulate(10.)
 
-def truck_test(solver=Newmark,tfinal=60.):
+    return sim.simulate(10.0)
+
+def truck_test(solver=Newmark, tfinal=60.0):
     truck = Truck()
-    prob = Explicit_Problem(rhs=truck.fcn,y0=truck.initial_conditions())
+    prob = Explicit_Problem(rhs=truck.fcn, y0=truck.initial_conditions())
 
     sim = solver(prob)
 
@@ -412,4 +409,5 @@ def truck_test(solver=Newmark,tfinal=60.):
     return ((nt,ny), (ct,cy))
 
 if __name__ == "__main__":
+    pend_test()
     truck_test()
