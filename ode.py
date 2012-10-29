@@ -381,16 +381,26 @@ def pend_test(solver=HHT):
     pend = Pendulum2nd()
     rhs = pend.fcn
     prob = Explicit_Problem(rhs=rhs, y0=array(pend.initial_condition()))
-    sim = solver(prob)
 
-    return sim.simulate(10.0)
+    s1 = solver(prob)
+    s2 = CVode(prob)
+
+    nt, ny = s1.simulate(10.0)
+    # ct, cy = s2.simulate(10.0)
+    
+    pylab.suptitle('Pendulum')
+
+    pylab.xlabel('t')
+    pylab.title(solver.__name__)
+    pylab.plot(nt, ny)
+
+    pylab.show()
 
 def truck_test(solver=Newmark, tfinal=60.0):
     truck = Truck()
     prob = Explicit_Problem(rhs=truck.fcn, y0=truck.initial_conditions())
 
     sim = solver(prob)
-
     nt,ny = sim.simulate(tfinal)
 
     sim = CVode(prob)
@@ -409,8 +419,11 @@ def truck_test(solver=Newmark, tfinal=60.0):
     pylab.plot(ct,cy)
 
     pylab.show()
+
     return ((nt,ny), (ct,cy))
 
 if __name__ == "__main__":
+    print " --- Pendulum --- "
     pend_test()
+    print " --- Truck --- "
     truck_test()
